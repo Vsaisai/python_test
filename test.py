@@ -380,13 +380,6 @@ class PhoneBookApp(QWidget):
             else:
                 QMessageBox.information(self, "Результат поиска", "Контакт не найден")
 
-    def closeEvent(self, event):
-        try:
-            if self.conn and not self.conn.closed:
-                self.conn.close()
-        except pyodbc.Error as e:
-            print(f"Ошибка при закрытии соединения с базой данных: {e}")
-
 
 if __name__ == "__main__":
     app = QApplication([])
