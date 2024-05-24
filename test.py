@@ -111,6 +111,7 @@ class PhoneBook:
 
 class PhoneBookApp(QWidget):
     def __init__(self):
+        global conn_str
         super().__init__()
 
         self.buttons = [
@@ -123,7 +124,7 @@ class PhoneBookApp(QWidget):
 
         # Получаем настройки из файла config.txt
         try:
-            with open("config.txt", "r") as file:
+            with open("conf.txt", "r") as file:
                 config_lines = file.readlines()
 
             # Извлекаем параметры из файла, игнорируя строки, начинающиеся с #
