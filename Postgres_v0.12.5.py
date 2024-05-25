@@ -100,6 +100,19 @@ class PhoneBookApp(QWidget):
             numbers_str = ", ".join([number[0] for number in numbers])
             self.contactList.addItem(f"Имя: {name}, Номер(а): {numbers_str}")
         self.contactList.addItem(f"Сохранено в PostgreSQL")
+        
+    '''
+    def findDuplicate(self,name):
+        people = self.phonebook.find_person_by_name(name)
+        if not people:
+            QMessageBox.warning(self, "Не найдено", "Контакт не найден")
+            return
+
+        if len(people) > 1:
+            QMessageBox.warning(self, "Ошибка", "Найдено несколько контактов с таким именем. Уточните имя.")
+            return
+        person_id, old_name = people[0]
+    '''
 
     def get_input(self, title, label):
         text, okPressed = QInputDialog.getText(self, title, label)
@@ -118,6 +131,9 @@ class PhoneBookApp(QWidget):
     def edit_contact(self):
         name, okPressed = self.get_input("Редактировать контакт", "ФИО для редактирования:")
         if okPressed:
+            
+            
+            
             people = self.phonebook.find_person_by_name(name)
             if not people:
                 QMessageBox.warning(self, "Не найдено", "Контакт не найден")
@@ -128,6 +144,9 @@ class PhoneBookApp(QWidget):
                 return
 
             person_id, old_name = people[0]
+            
+            
+            
 
             new_name, okPressed = self.get_input("Редактировать контакт", f"Новое ФИО (старое: {old_name}):")
             if okPressed and new_name:
@@ -157,13 +176,22 @@ class PhoneBookApp(QWidget):
     def delete_contact(self):
         name, okPressed = self.get_input("Удалить контакт", "ФИО:")
         if okPressed:
+
+
+
+            # Ищем контакт по точному совпадению имени
             people = self.phonebook.find_person_by_name(name)
             if not people:
                 QMessageBox.warning(self, "Не найдено", "Контакт не найден")
                 return
-            for person in people:
-                person_id, _ = person
-                self.phonebook.delete_person(person_id)
+            if len(people) > 1:
+                QMessageBox.warning(self, "Ошибка", "Найдено несколько контактов с таким именем. Уточните имя.")
+                return
+            person_id, _ = people[0]
+
+
+
+            self.phonebook.delete_person(person_id)
             QMessageBox.information(self, "Удалено", "Контакт удален")
             self.show_all_contacts()
 
