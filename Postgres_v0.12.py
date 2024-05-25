@@ -38,10 +38,19 @@ class PhoneBook:
             cur.execute("SELECT number FROM phone_numbers WHERE person_id = %s", (person_id,))
             return cur.fetchall()
 
-    def find_person_by_name(self, name):
+    def find_person_by_name(self, search_text):
         with self.conn.cursor() as cur:
-            cur.execute("SELECT * FROM people WHERE name = %s", (name,))
-            return cur.fetchall()
+            # Поиск по части имени
+            cur.execute("SELECT * FROM people WHERE name ILIKE %s", ('%' + search_text + '%',))
+            results_by_name = cur.fetchall()
+            # Поиск по части номера телефона
+            cur.execute(
+                ('%' + search_text + '%',),
+                "SELECT DISTINCT people.* FROM people INNER JOIN phone_numbers ON people.id = phone_numbers.person_id WHERE phone_numbers.number LIKE %s")
+            results_by_phone = cur.fetchall()
+            all_results = results_by_name + results_by_phone
+
+            return all_results
 
     def delete_person(self, person_id):
         with self.conn.cursor() as cur:
