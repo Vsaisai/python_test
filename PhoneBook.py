@@ -22,9 +22,9 @@ class PhoneBook:
             self.conn.commit()
         return person_id
 
-    def add_phone_number(self, person_id, phone_number):
+    def add_phone_number(self, person_id, number):
         with self.conn.cursor() as cur:
-            cur.execute("INSERT INTO phone_numbers (person_id, number) VALUES (%s, %s)", (person_id, phone_number))
+            cur.execute("INSERT INTO phone_numbers (person_id, number) VALUES (%s, %s)", (person_id, number))
             self.conn.commit()
 
     def get_people(self):
@@ -34,7 +34,7 @@ class PhoneBook:
 
     def get_phone_numbers(self, person_id):
         with self.conn.cursor() as cur:
-            cur.execute("SELECT phone_numbers FROM phone_numbers WHERE person_id = %s", (person_id,))
+            cur.execute("SELECT number FROM phone_numbers WHERE person_id = %s", (person_id,))
             return [row[0] for row in cur.fetchall()]
 
     def find_person_by_name(self, name):
@@ -129,3 +129,68 @@ class PhoneBookApp(QWidget):
             if okPressed and new_name:
                 with self.conn.cursor() as cur:
                     cur.execute
+                    cur.execute("UPDATE people SET name = %s WHERE id = %s", (new_name, person_id))
+                    self.conn.commit()
+
+            old_numbers = self.phonebook.get_phone_numbers(person_id)
+            old_numbers_str = ", ".join(old_numbers)
+
+            new_numbers = []
+            while True:
+                number, okPressed = QInputDialog.getText(self, "Редактировать контакт", f"Новый номер (старые: {old_numbers_str}, Enter для завершения):")
+                if not okPressed or not number.strip():
+                    break
+                new_numbers.append(number.strip())
+
+            with self.conn.cursor() as cur:
+                cur.execute("DELETE FROM phone_numbers WHERE person_id = %s", (person_id,))
+                for number in new_numbers:
+                    cur.execute("INSERT INTO phone_numbers (person_id, phone_number) VALUES (%s, %s)",
+                                (person_id, number))
+                self.conn.commit()
+
+            QMessageBox.information(self, "Изменено", "Контакт изменен")
+            self.show_all_contacts()
+
+    def delete_contact(self):
+        name, okPressed = self.get_input("Удалить контакт", "ФИО:")
+        if okPressed:
+            people = self.phonebook.find_person_by_name(name)
+            if not people:
+                QMessageBox.warning(self, "Не найдено", "Контакт не найден")
+                return
+            if len(people) > 1:
+                QMessageBox.warning(self, "Ошибка", "Найдено несколько контактов с таким именем. Уточните имя.")
+                return
+            person_id, _ = people[0]
+
+            self.phonebook.delete_person(person_id)
+            QMessageBox.information(self, "Удалено", "Контакт удален")
+            self.show_all_contacts()
+
+    def search_contact(self):
+        search_text, okPressed = self.get_input("Найти контакт", "Введите ФИО для поиска:")
+        if okPressed:
+            self.contactList.clear()
+            people = self.phonebook.find_person_by_name(search_text)
+            if not people:
+                QMessageBox.warning(self, "Не найдено", "Контакт не найден")
+                return
+            for person in people:
+                person_id, name = person
+                phone_numbers = self.phonebook.get_phone_numbers(person_id)
+                numbers_str = ", ".join(phone_numbers)
+                self.contactList.addItem(f"Имя: {name}, Номер(а): {numbers_str}")
+
+    def closeEvent(self, event):
+        try:
+            self.conn.close()
+        except psycopg2.Error as e:
+            print(f"Ошибка при закрытии подключения к базе данных: {e}")
+
+
+if __name__ == "__main__":
+    app = QApplication([])
+    ex = PhoneBookApp()
+    ex.show()
+    sys.exit(app.exec_())
