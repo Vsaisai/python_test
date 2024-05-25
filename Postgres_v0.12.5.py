@@ -45,11 +45,11 @@ class PhoneBook:
             results_by_name = cur.fetchall()
             # Поиск по части номера телефона
             cur.execute(
-                ('%' + search_text + '%',),
-                "SELECT DISTINCT people.* FROM people INNER JOIN phone_numbers ON people.id = phone_numbers.person_id WHERE phone_numbers.number LIKE %s")
+                "SELECT DISTINCT people.* FROM people INNER JOIN phone_numbers ON people.id = phone_numbers.person_id WHERE phone_numbers.number LIKE %s",
+                ('%' + search_text + '%',)
+            )
             results_by_phone = cur.fetchall()
             all_results = results_by_name + results_by_phone
-
             return all_results
 
     def delete_person(self, person_id):
@@ -62,6 +62,7 @@ class PhoneBook:
 class PhoneBookApp(QWidget):
     def __init__(self):
         super().__init__()
+        self.contactList = None
         self.buttons = [
             ("Вывести все контакты", self.show_all_contacts),
             ("Добавить контакт", self.add_contact),
@@ -144,8 +145,7 @@ class PhoneBookApp(QWidget):
                 return
 
             person_id, old_name = people[0]
-            
-            
+
             
 
             new_name, okPressed = self.get_input("Редактировать контакт", f"Новое ФИО (старое: {old_name}):")
