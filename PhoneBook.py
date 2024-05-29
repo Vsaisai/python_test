@@ -2,7 +2,26 @@ import sys
 import yaml
 import os
 import psycopg2
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QListWidget, QMessageBox, QInputDialog
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QListWidget, QMessageBox, QInputDialog, \
+    QDialog, QCheckBox, QVBoxLayout, QPushButton
+
+
+class CheckBoxDialog(QDialog):
+    def __init__(self, items, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Выберите номера для удаления")
+        self.layout = QVBoxLayout(self)
+        self.checkboxes = []
+        for item in items:
+            checkbox = QCheckBox(item, self)
+            self.layout.addWidget(checkbox)
+            self.checkboxes.append(checkbox)
+        self.okButton = QPushButton("OK", self)
+        self.okButton.clicked.connect(self.accept)
+        self.layout.addWidget(self.okButton)
+
+    def get_checked_items(self):
+        return [cb.text() for cb in self.checkboxes if cb.isChecked()]
 
 
 class PhoneBook:
@@ -13,7 +32,8 @@ class PhoneBook:
     def create_database(self):
         with self.conn.cursor() as cur:
             cur.execute("CREATE TABLE IF NOT EXISTS people (id SERIAL PRIMARY KEY, name VARCHAR(255))")
-            cur.execute("CREATE TABLE IF NOT EXISTS phone_numbers (id SERIAL PRIMARY KEY, person_id INTEGER, phone_number VARCHAR(255), FOREIGN KEY(person_id) REFERENCES people(id))")
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS phone_numbers (id SERIAL PRIMARY KEY, person_id INTEGER, phone_number VARCHAR(255), FOREIGN KEY(person_id) REFERENCES people(id))")
 
     def add_person(self, name):
         with self.conn.cursor() as cur:
@@ -37,9 +57,24 @@ class PhoneBook:
             cur.execute("SELECT number FROM phone_numbers WHERE person_id = %s", (person_id,))
             return [row[0] for row in cur.fetchall()]
 
-    def find_person_by_name(self, name):
+    def find_person_by_name_or_phone(self, search_text):
         with self.conn.cursor() as cur:
-            cur.execute("SELECT * FROM people WHERE name ILIKE %s", ('%' + name + '%',))
+            cur.execute("SELECT * FROM people WHERE name ILIKE %s", ('%' + search_text + '%',))
+            results_by_name = cur.fetchall()
+
+            cur.execute("""
+                SELECT DISTINCT p.* FROM people p
+                INNER JOIN phone_numbers pn ON p.id = pn.person_id
+                WHERE pn.number LIKE %s
+            """, ('%' + search_text + '%',))
+            results_by_phone = cur.fetchall()
+
+            all_results = results_by_name + results_by_phone
+            return list(set(all_results))  # Remove duplicates
+
+    def find_person_by_exact_name(self, name):
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT * FROM people WHERE name = %s", (name,))
             return cur.fetchall()
 
     def delete_person(self, person_id):
@@ -114,7 +149,7 @@ class PhoneBookApp(QWidget):
     def edit_contact(self):
         name, okPressed = self.get_input("Редактировать контакт", "ФИО для редактирования:")
         if okPressed:
-            people = self.phonebook.find_person_by_name(name)
+            people = self.phonebook.find_person_by_exact_name(name)
             if not people:
                 QMessageBox.warning(self, "Не найдено", "Контакт не найден")
                 return
@@ -128,24 +163,35 @@ class PhoneBookApp(QWidget):
             new_name, okPressed = self.get_input("Редактировать контакт", f"Новое ФИО (старое: {old_name}):")
             if okPressed and new_name:
                 with self.conn.cursor() as cur:
-                    cur.execute
                     cur.execute("UPDATE people SET name = %s WHERE id = %s", (new_name, person_id))
                     self.conn.commit()
 
             old_numbers = self.phonebook.get_phone_numbers(person_id)
-            old_numbers_str = ", ".join(old_numbers)
+
+            # Show dialog to select numbers to delete
+            dialog = CheckBoxDialog(old_numbers, self)
+            if dialog.exec_() == QDialog.Accepted:
+                delete_numbers = dialog.get_checked_items()
+            else:
+                delete_numbers = []
+
+            for number in delete_numbers:
+                old_numbers.remove(number)
 
             new_numbers = []
             while True:
-                number, okPressed = QInputDialog.getText(self, "Редактировать контакт", f"Новый номер (старые: {old_numbers_str}, Enter для завершения):")
+                number, okPressed = QInputDialog.getText(self, "Добавить новый номер",
+                                                         f"Новый номер (оставьте пустым для завершения):")
                 if not okPressed or not number.strip():
                     break
                 new_numbers.append(number.strip())
 
             with self.conn.cursor() as cur:
-                cur.execute("DELETE FROM phone_numbers WHERE person_id = %s", (person_id,))
+                for number in delete_numbers:
+                    cur.execute("DELETE FROM phone_numbers WHERE person_id = %s AND number = %s",
+                                (person_id, number))
                 for number in new_numbers:
-                    cur.execute("INSERT INTO phone_numbers (person_id, phone_number) VALUES (%s, %s)",
+                    cur.execute("INSERT INTO phone_numbers (person_id, number) VALUES (%s, %s)",
                                 (person_id, number))
                 self.conn.commit()
 
@@ -155,7 +201,7 @@ class PhoneBookApp(QWidget):
     def delete_contact(self):
         name, okPressed = self.get_input("Удалить контакт", "ФИО:")
         if okPressed:
-            people = self.phonebook.find_person_by_name(name)
+            people = self.phonebook.find_person_by_exact_name(name)
             if not people:
                 QMessageBox.warning(self, "Не найдено", "Контакт не найден")
                 return
@@ -169,10 +215,10 @@ class PhoneBookApp(QWidget):
             self.show_all_contacts()
 
     def search_contact(self):
-        search_text, okPressed = self.get_input("Найти контакт", "Введите ФИО для поиска:")
+        search_text, okPressed = self.get_input("Найти контакт", "Введите ФИО или номер для поиска:")
         if okPressed:
             self.contactList.clear()
-            people = self.phonebook.find_person_by_name(search_text)
+            people = self.phonebook.find_person_by_name_or_phone(search_text)
             if not people:
                 QMessageBox.warning(self, "Не найдено", "Контакт не найден")
                 return
