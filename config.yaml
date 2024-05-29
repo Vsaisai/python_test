@@ -1,9 +1,9 @@
-host: localhost
+host: localhost #or your_host
 
-database: phonebook
+database: phonebook #or your_db
 
-user: postgres
+user: postgres #or your_user 
 
-password: 1234
+password: #your_password
 
-port: 5432
+port: 5432 #or your_port
